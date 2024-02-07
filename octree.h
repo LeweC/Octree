@@ -208,6 +208,28 @@ namespace OrthoTree
       return sqrt(size2(pt));
     }
 
+    static constexpr geometry_type pose_size(vector_type const& pt) noexcept
+    {
+      auto d2 = geometry_type{ 0 };
+      auto angle_dis = geometry_type{ 0 };
+      for (dim_type iDim = 0; iDim < nDimension; ++iDim)
+      {
+        if (iDim < 3)
+        {
+          autoc d = base::point_comp_c(pt, iDim);
+          d2 += d * d;
+        }
+        else
+        {
+          angle_dis += base::point_comp_c(pt, iDim);
+        }
+      }
+      autoc translation_part = sqrt(d2);
+      autoc orientation_part = angle_dis / 3;
+
+      return translation_part + orientation_part;
+    }
+
     static constexpr vector_type add(vector_type const& ptL, vector_type const& ptR) noexcept
     {
       auto pt = vector_type{};
