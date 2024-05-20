@@ -25,7 +25,7 @@ using namespace OrthoTree;
 
 namespace
 {
-  autoce N = dim_type{ 3 };
+  autoce N = dim_t{ 3 };
 
   autoce szSeparator = "; ";
   autoce szNewLine = "\n";
@@ -44,7 +44,7 @@ namespace
 
   using time_unit = milliseconds;
 
-  using Adaptor = AdaptorGeneral<N, PointND<N>, BoundingBoxND<N>>;
+  using Adaptor = AdaptorGeneral<N, PointND<N>, BoundingBoxND<N>, RayND<N>, PlaneND<N>>;
   autoce degree_to_rad(double degree) { return degree / 180.0 * std::numbers::pi; }
 
 
@@ -53,17 +53,17 @@ namespace
   {
     auto ptMax = pt;
     for (size_t iDim = 0; iDim < nDim; ++iDim)
-      Adaptor::point_comp(ptMax, static_cast<dim_type>(iDim)) += size;
+      Adaptor::SetPointC(ptMax, static_cast<dim_t>(iDim), Adaptor::GetPointC(pt, static_cast<dim_t>(iDim)) + size);
 
     return ptMax;
   }
 
 
-  template<dim_type nDim>
+  template<dim_t nDim>
   static BoundingBoxND<nDim> CreateSearcBox(double rBegin, double rSize)
   {
     auto box = BoundingBoxND<nDim>{};
-    for (dim_type iDim = 0; iDim < nDim; ++iDim)
+    for (dim_t iDim = 0; iDim < nDim; ++iDim)
       box.Min[iDim] = rBegin;
 
     box.Max = CreateBoxMax<nDim>(box.Min, rSize);
@@ -71,7 +71,7 @@ namespace
   }
 
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<PointND<nDim>> CreatePoints_Diagonal()
   {
     auto aPoint = vector<PointND<nDim>>(nNumber);
@@ -81,7 +81,7 @@ namespace
     size_t iNumber = 1;
 
     auto ptMax = PointND<nDim>{};
-    for (dim_type iDim = 0; iDim < nDim; ++iDim)
+    for (dim_t iDim = 0; iDim < nDim; ++iDim)
       ptMax[iDim] = rMax;
 
     // Corner points
@@ -89,7 +89,7 @@ namespace
       aPoint[1] = ptMax;
       ++iNumber;
 
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
         aPoint[iNumber][iDim] = rMax;
     }
 
@@ -99,23 +99,24 @@ namespace
       autoc nRemain = nNumber - iNumber;
       autoc rStep = rMax / static_cast<double>(nRemain + 2);
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
-        for (dim_type iDim = 0; iDim < nDim; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim; ++iDim)
           aPoint[iNumber][iDim] = rMax - iRemain * rStep;
 
     }
 
     std::random_device rd;
     std::mt19937 g(rd());
+    g.seed();
     std::shuffle(next(begin(aPoint), nNumberPre), end(aPoint), g);
 
-    autoc box = Adaptor::box_of_points(aPoint);
-    assert(Adaptor::are_points_equal(box.Max, ptMax, 0.0001));
-    assert(Adaptor::are_points_equal(box.Min, PointND<nDim>{}, 0.0001));
+    [[maybe_unused]] autoc box = Adaptor::GetBoxOfPoints(aPoint);
+    assert(Adaptor::ArePointsEqual(box.Max, ptMax, 0.0001));
+    assert(Adaptor::ArePointsEqual(box.Min, PointND<nDim>{}, 0.0001));
 
     return aPoint;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<PointND<nDim>> CreatePoints_Random()
   {
     auto aPoint = vector<PointND<nDim>>(nNumber);
@@ -125,7 +126,7 @@ namespace
     size_t iNumber = 1;
 
     auto ptMax = PointND<nDim>{};
-    for (dim_type iDim = 0; iDim < nDim; ++iDim)
+    for (dim_t iDim = 0; iDim < nDim; ++iDim)
       ptMax[iDim] = rMax;
 
 
@@ -134,26 +135,26 @@ namespace
       aPoint[1] = ptMax;
       ++iNumber;
 
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
         aPoint[iNumber][iDim] = rMax;
     }
 
     srand(0);
     {
       for (; iNumber < nNumber; ++iNumber)
-        for (dim_type iDim = 0; iDim < nDim; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim; ++iDim)
           aPoint[iNumber][iDim] = (rand() % 100) * (rMax / 100.0);
 
     }
 
-    autoc box = Adaptor::box_of_points(aPoint);
-    assert(Adaptor::are_points_equal(box.Max, ptMax, 0.0001));
-    assert(Adaptor::are_points_equal(box.Min, PointND<nDim>{}, 0.0001));
+    [[maybe_unused]] autoc box = Adaptor::GetBoxOfPoints(aPoint);
+    assert(Adaptor::ArePointsEqual(box.Max, ptMax, 0.0001));
+    assert(Adaptor::ArePointsEqual(box.Min, PointND<nDim>{}, 0.0001));
 
     return aPoint;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<PointND<nDim>> CreatePoints_CylindricalSemiRandom()
   {
     auto aPoint = vector<PointND<nDim>>(nNumber);
@@ -163,7 +164,7 @@ namespace
     size_t iNumber = 1;
 
     auto ptMax = PointND<nDim>{};
-    for (dim_type iDim = 0; iDim < nDim; ++iDim)
+    for (dim_t iDim = 0; iDim < nDim; ++iDim)
       ptMax[iDim] = rMax;
 
     // Corner points
@@ -171,7 +172,7 @@ namespace
       aPoint[1] = ptMax;
       ++iNumber;
 
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
         aPoint[iNumber][iDim] = rMax;
     }
 
@@ -184,21 +185,21 @@ namespace
         aPoint[iNumber][0] = cos(rAngle) * rRadius + rMax / 2.0;
         aPoint[iNumber][1] = sin(rAngle) * rRadius + rMax / 2.0;
 
-        for (dim_type iDim = 2; iDim < nDim; ++iDim)
+        for (dim_t iDim = 2; iDim < nDim; ++iDim)
           aPoint[iNumber][iDim] = (rand() % 100) * rMax / 100.0;
       }
     }
 
-    autoc box = Adaptor::box_of_points(aPoint);
-    assert(Adaptor::are_points_equal(box.Max, ptMax, 0.0001));
-    assert(Adaptor::are_points_equal(box.Min, PointND<nDim>{}, 0.0001));
+    [[maybe_unused]] autoc box = Adaptor::GetBoxOfPoints(aPoint);
+    assert(Adaptor::ArePointsEqual(box.Max, ptMax, 0.0001));
+    assert(Adaptor::ArePointsEqual(box.Min, PointND<nDim>{}, 0.0001));
 
     return aPoint;
   }
 
 
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<BoundingBoxND<nDim>> CreateBoxes_Diagonal()
   {
     if (nNumber == 0)
@@ -215,7 +216,7 @@ namespace
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
       {
         aBox[iNumber].Min[iDim] = rMax - rUnit;
         aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -224,7 +225,7 @@ namespace
         return aBox;
 
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aBox[iNumber].Min[iDim] = rMax - rUnit;
 
       aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -238,7 +239,7 @@ namespace
       autoc rStep = (rMax - rUnit) / (nRemain + 2);
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
       {
-        for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
           aBox[iNumber].Min[iDim] = rMax - rUnit - iRemain * rStep;
 
         aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rStep);
@@ -248,7 +249,7 @@ namespace
     return aBox;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<BoundingBoxND<nDim>> CreateBoxes_Random()
   {
     if (nNumber == 0)
@@ -265,7 +266,7 @@ namespace
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
       {
         aBox[iNumber].Min[iDim] = rMax - rUnit;
         aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -274,7 +275,7 @@ namespace
         return aBox;
 
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aBox[iNumber].Min[iDim] = rMax - rUnit;
 
       aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -288,7 +289,7 @@ namespace
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
       {
         autoc iNumberBox = nNumber - iNumber - 1;
-        for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
           aBox[iNumberBox].Min[iDim] = (rand() % 100) * ((rMax - 1.0) / 100.0);
 
         aBox[iNumberBox].Max = CreateBoxMax(aBox[iNumberBox].Min, (rand() % 100) * (1.0 * rUnit / 100.0));
@@ -298,7 +299,7 @@ namespace
     return aBox;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<BoundingBoxND<nDim>> CreateBoxes_CylindricalSemiRandom()
   {
     if (nNumber == 0)
@@ -314,7 +315,7 @@ namespace
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
       {
         aBox[iNumber].Min[iDim] = rMax - rUnit;
         aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -323,7 +324,7 @@ namespace
         return aBox;
 
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aBox[iNumber].Min[iDim] = rMax - rUnit;
 
       aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rUnit);
@@ -342,7 +343,7 @@ namespace
         aBox[iNumber].Min[0] = cos(rAngle) * rRadius + rMax / 2.0 - rSize / 2.0;
         aBox[iNumber].Min[1] = sin(rAngle) * rRadius + rMax / 2.0 - rSize / 2.0;
 
-        for (dim_type iDim = 2; iDim < nDim; ++iDim)
+        for (dim_t iDim = 2; iDim < nDim; ++iDim)
           aBox[iNumber].Min[iDim] = (rand() % 100) * 0.01 * (rMax - 2.0 * rUnit) + rUnit - rSize / 2.0;
 
         aBox[iNumber].Max = CreateBoxMax(aBox[iNumber].Min, rSize);
@@ -353,11 +354,11 @@ namespace
     return aBox;
   }
 
-  template <typename vector_type, typename box_type>
-  vector<vector<OrthoTree::entity_id_type>> RangeSearchNaive(span<box_type const> const& vSearchBox, span<box_type const> const& vBox)
+  template <typename TVector, typename TBox>
+  vector<vector<std::size_t>> RangeSearchNaive(span<TBox const> const& vSearchBox, span<TBox const> const& vBox)
   {
     autoc n = vBox.size();
-    auto vElementFound = vector<vector<OrthoTree::entity_id_type>>();
+    auto vElementFound = vector<vector<std::size_t>>();
     vElementFound.reserve(n);
     for (autoc& boxSearch : vSearchBox)
     {
@@ -365,33 +366,33 @@ namespace
       vElementByBox.reserve(50);
 
       for (size_t i = 0; i < n; ++i)
-        if (AdaptorGeneral<N, vector_type, box_type>::are_boxes_overlapped(boxSearch, vBox[i], false))
+        if (AdaptorGeneral<N, TVector, TBox>::AreBoxesOverlapped(boxSearch, vBox[i], false))
           vElementByBox.emplace_back(i);
     }
     return vElementFound;
   }
 
-  template <typename vector_type, typename box_type, typename execution_policy_type = std::execution::unsequenced_policy>
-  vector<std::pair<entity_id_type, entity_id_type>> SelfConflicthNaive(span<box_type const> const& vBox)
+  template<typename TVector, typename TBox, typename TRay, typename TPlane, typename execution_policy_type = std::execution::unsequenced_policy>
+  vector<std::pair<std::size_t, std::size_t>> SelfConflicthNaive(span<TBox const> const& vBox)
   {
     autoc nEntity = vBox.size();
 
-    auto vidCheck = vector<entity_id_type>(nEntity);
+    auto vidCheck = vector<std::size_t>(nEntity);
     std::iota(std::begin(vidCheck), std::end(vidCheck), 0);
 
-    auto vvidCollision = vector<vector<entity_id_type>>(vidCheck.size());
+    auto vvidCollision = vector<vector<std::size_t>>(vidCheck.size());
     auto ep = execution_policy_type{};
-    std::transform(ep, std::begin(vidCheck), std::end(vidCheck), std::begin(vvidCollision), [&](autoc idCheck) -> vector<entity_id_type>
+    std::transform(ep, std::begin(vidCheck), std::end(vidCheck), std::begin(vvidCollision), [&](autoc idCheck) -> vector<std::size_t>
     {
-      auto sidFound = vector<entity_id_type>();
+      auto sidFound = vector<std::size_t>();
       for (size_t i = idCheck + 1; i < nEntity; ++i)
-        if (AdaptorGeneral<N, vector_type, box_type>::are_boxes_overlapped(vBox[idCheck], vBox[i], false))
+        if (AdaptorGeneral<N, TVector, TBox, TRay, TPlane>::AreBoxesOverlapped(vBox[idCheck], vBox[i], false))
           sidFound.emplace_back(i);
 
       return sidFound;
     });
 
-    auto vPair = vector<std::pair<entity_id_type, entity_id_type>>{};
+    auto vPair = vector<std::pair<std::size_t, std::size_t>>{};
     if (nEntity > 10)
       vPair.reserve(nEntity / 10);
 
@@ -403,11 +404,11 @@ namespace
   }
 
 
-  template <typename vector_type, typename box_type>
-  vector<vector<OrthoTree::entity_id_type>> RangeSearchNaive(span<box_type const> const& vSearchBox, span<vector_type const> const& vPoint)
+  template <typename TVector, typename TBox>
+  vector<vector<std::size_t>> RangeSearchNaive(span<TBox const> const& vSearchBox, span<TVector const> const& vPoint)
   {
     autoc n = vPoint.size();
-    auto vElementFound = vector<vector<OrthoTree::entity_id_type>>();
+    auto vElementFound = vector<vector<std::size_t>>();
     vElementFound.reserve(n);
     for (autoc& boxSearch : vSearchBox)
     {
@@ -415,15 +416,15 @@ namespace
       vElementByBox.reserve(50);
 
       for (size_t i = 0; i < n; ++i)
-        if (AdaptorGeneral<N, vector_type, box_type>::does_box_contain_point(boxSearch, vPoint[i]))
+        if (AdaptorGeneral<N, TVector, TBox>::DoesBoxContainPoint(boxSearch, vPoint[i]))
           vElementByBox.emplace_back(i);
     }
     return vElementFound;
   }
 
 
-  template<dim_type nDim>
-  static size_t TreePointCreate(depth_type depth, std::span<PointND<nDim> const> const& aPoint, bool fPar = false)
+  template<dim_t nDim>
+  static size_t TreePointCreate(depth_t depth, std::span<PointND<nDim> const> const& aPoint, bool fPar = false)
   {
     auto box = BoundingBoxND<nDim>{};
     box.Max.fill(rMax);
@@ -437,8 +438,8 @@ namespace
     return nt.GetNodes().size();
   }
 
-  template<dim_type nDim>
-  static size_t TreePointNaiveCreate(depth_type depth, std::span<PointND<nDim> const> const& aPoint, bool)
+  template<dim_t nDim>
+  static size_t TreePointNaiveCreate(depth_t depth, std::span<PointND<nDim> const> const& aPoint, bool)
   {
     auto box = BoundingBoxND<nDim>{};
     box.Max.fill(rMax);
@@ -448,8 +449,8 @@ namespace
   }
 
 
-  template<dim_type nDim>
-  static size_t TreeBoxCreate(depth_type depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool fPar = false)
+  template<dim_t nDim>
+  static size_t TreeBoxCreate(depth_t depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool fPar = false)
   {
     auto box = BoundingBoxND<nDim>{};
     box.Max.fill(rMax);
@@ -464,8 +465,8 @@ namespace
     return nt.GetNodes().size();
   }
 
-  template<dim_type nDim>
-  static size_t TreeBoxDynCreate(depth_type depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool)
+  template<dim_t nDim>
+  static size_t TreeBoxDynCreate(depth_t depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool)
   {
     auto box = BoundingBoxND<nDim>{};
     box.Max.fill(rMax);
@@ -494,10 +495,10 @@ namespace
     string szDisplay;
     int nDataSize;
     int nRepeat = 10;
-    depth_type nDepth = 5;
+    depth_t nDepth = 5;
     bool fParallel = false;
     span<entity_type const> sEntity;
-    function<size_t(depth_type, span<entity_type const>, bool)> func;
+    function<size_t(depth_t, span<entity_type const>, bool)> func;
 
     size_t Run() const { return func(nDepth, sEntity, fParallel); }
   };
@@ -546,8 +547,8 @@ namespace
   static_assert(nSizeLog == aRepeatLog.size());
 
 
-  template<dim_type N>
-  vector<MeasurementTask<PointND<N>>> GeneratePointTasks(depth_type nDepth, string const& szName, span<PointND<N> const> const& sPoint)
+  template<dim_t N>
+  vector<MeasurementTask<PointND<N>>> GeneratePointTasks(depth_t nDepth, string const& szName, span<PointND<N> const> const& sPoint)
   {
     auto vTask = vector<MeasurementTask<PointND<N>>>();
     for (autoc fPar : { false, true })
@@ -557,8 +558,8 @@ namespace
     return vTask;
   }
 
-  template<dim_type N>
-  vector<MeasurementTask<PointND<N>>> GeneratePointTasks_NonLog(depth_type nDepth, string const& szName, span<PointND<N> const> const& sPoint)
+  template<dim_t N>
+  vector<MeasurementTask<PointND<N>>> GeneratePointTasks_NonLog(depth_t nDepth, string const& szName, span<PointND<N> const> const& sPoint)
   {
     auto vTask = vector<MeasurementTask<PointND<N>>>();
     for (size_t iSize = 0; iSize < nSizeNonLog; ++iSize)
@@ -568,8 +569,8 @@ namespace
   }
 
 
-  template<dim_type N>
-  vector<MeasurementTask<PointND<N>>> GeneratePointDynTasks_NonLog(depth_type nDepth, string const& szName, span<PointND<N> const> const& sPoint)
+  template<dim_t N>
+  vector<MeasurementTask<PointND<N>>> GeneratePointDynTasks_NonLog(depth_t nDepth, string const& szName, span<PointND<N> const> const& sPoint)
   {
     auto vTask = vector<MeasurementTask<PointND<N>>>();
     for (size_t iSize = 0; iSize < nSizeLog; ++iSize)
@@ -578,8 +579,8 @@ namespace
     return vTask;
   }
 
-  template<dim_type N>
-  vector<MeasurementTask<BoundingBoxND<N>>> GenerateBoxDynTasks_NonLog(depth_type nDepth, string const& szName, span<BoundingBoxND<N> const> const& sBox)
+  template<dim_t N>
+  vector<MeasurementTask<BoundingBoxND<N>>> GenerateBoxDynTasks_NonLog(depth_t nDepth, string const& szName, span<BoundingBoxND<N> const> const& sBox)
   {
     auto vTask = vector<MeasurementTask<BoundingBoxND<N>>>();
     for (size_t iSize = 0; iSize < nSizeLog; ++iSize)
@@ -589,8 +590,8 @@ namespace
   }
 
 
-  template<dim_type N>
-  vector<MeasurementTask<BoundingBoxND<N>>> SearchTreeBoxTasks(depth_type nDepth, string const& szName, span<BoundingBoxND<N> const> const& aBox_)
+  template<dim_t N>
+  vector<MeasurementTask<BoundingBoxND<N>>> SearchTreeBoxTasks(depth_t nDepth, string const& szName, span<BoundingBoxND<N> const> const& aBox_)
   {
     auto vTask = vector<MeasurementTask<BoundingBoxND<N>>>();
     for (autoc fPar : { false, true })
@@ -610,7 +611,7 @@ namespace
           else 
             nDepthActual = 6;
         }
-        vTask.push_back(MeasurementTask<BoundingBoxND<N>>{ szName, aSizeNonLog[iSize], aRepeatNonLog[iSize], nDepthActual, fPar, aBox_.subspan(0, aSizeNonLog[iSize]), [](depth_type nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
+        vTask.push_back(MeasurementTask<BoundingBoxND<N>>{ szName, aSizeNonLog[iSize], aRepeatNonLog[iSize], nDepthActual, fPar, aBox_.subspan(0, aSizeNonLog[iSize]), [](depth_t nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
         {
           autoce nSplit = 2;
           auto nt = TreeBoxND<N, nSplit>{};
@@ -618,7 +619,7 @@ namespace
           {
             TreeBoxND<N, nSplit>::template Create<std::execution::parallel_unsequenced_policy>(nt, aBox, nDepth, boxMax);
             autoc vPair = nt.template CollisionDetection<std::execution::parallel_unsequenced_policy>(aBox);
-            return vPair.size();
+            return size_t{};
             //return nt.GetNodes().size();
           }
           else
@@ -645,14 +646,14 @@ namespace
     return vTask;
   }
 
-  template<dim_type N>
-  vector<MeasurementTask<BoundingBoxND<N>>> SearchBruteForceBoxTasks(depth_type nDepth, string const& szName, span<BoundingBoxND<N> const> const& aBox_)
+  template<dim_t N>
+  vector<MeasurementTask<BoundingBoxND<N>>> SearchBruteForceBoxTasks(depth_t nDepth, string const& szName, span<BoundingBoxND<N> const> const& aBox_)
   {
     auto vTask = vector<MeasurementTask<BoundingBoxND<N>>>();
     for (size_t iSize = 0; iSize < nSizeNonLog; ++iSize)
       vTask.push_back(MeasurementTask<BoundingBoxND<N>>
         { szName, aSizeNonLog[iSize], aRepeatNonLog[iSize], nDepth, false, aBox_.subspan(0, aSizeNonLog[iSize])
-        , [](depth_type nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
+        , [](depth_t nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
           {
             autoc vvElem = RangeSearchNaive<PointND<N>, BoundingBoxND<N>>(aBox, aBox);
 
@@ -668,23 +669,23 @@ namespace
     return vTask;
   }
 
-  template<dim_type N>
+  template<dim_t N>
   vector<MeasurementTask<BoundingBoxND<N>>> SelfConflictBruteForceBoxTasks(string const& szName, span<BoundingBoxND<N> const> const& aBox_)
   {
     auto vTask = vector<MeasurementTask<BoundingBoxND<N>>>();
     for (size_t iSize = 0; iSize < nSizeNonLog; ++iSize)
       vTask.push_back(MeasurementTask<BoundingBoxND<N>>
     { szName, aSizeNonLog[iSize], aRepeatNonLog[iSize], 0, false, aBox_.subspan(0, aSizeNonLog[iSize])
-        , [](depth_type nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
+        , [](depth_t nDepth, span<BoundingBoxND<N> const> const& aBox, bool fPar)
     {
       if (!fPar)
       {
-        autoc vvElem = SelfConflicthNaive<PointND<N>, BoundingBoxND<N>>(aBox);
+        autoc vvElem = SelfConflicthNaive<PointND<N>, BoundingBoxND<N>, RayND<N>, PlaneND<N>>(aBox);
         return vvElem.size();
       }
       else
       {
-        autoc vvElem = SelfConflicthNaive<PointND<N>, BoundingBoxND<N>, std::execution::parallel_unsequenced_policy>(aBox);
+        autoc vvElem = SelfConflicthNaive<PointND<N>, BoundingBoxND<N>, RayND<N>, PlaneND<N>, std::execution::parallel_unsequenced_policy>(aBox);
         return vvElem.size();
       }
     }
@@ -696,7 +697,7 @@ namespace
 
 
   template<size_t N>
-  vector<MeasurementTask<BoundingBoxND<N>>> GenerateBoxTasks(depth_type nDepth, string szName, span<BoundingBoxND<N> const> const& sBox)
+  vector<MeasurementTask<BoundingBoxND<N>>> GenerateBoxTasks(depth_t nDepth, string szName, span<BoundingBoxND<N> const> const& sBox)
   {
     auto vTask = vector<MeasurementTask<BoundingBoxND<N>>>();
     for (autoc fPar : { false, true })
@@ -752,8 +753,8 @@ int main()
 
   ofstream report;
   report.open("report.csv");
-
-  autoce nDepth = depth_type{ 5 };
+  
+  autoce nDepth = depth_t{ 5 };
   {
     autoc szName = string("Diagonally placed points");
     autoc aPointDiag_100M = GenerateGeometry<N, vector<PointND<N>>>([&] { return CreatePoints_Diagonal<N, 100 * N1M>(); }, szName, 100, report);
@@ -774,6 +775,7 @@ int main()
     autoc vTask = GeneratePointTasks<N>(nDepth, szName, aPointDiag_100M);
     RunTasks(vTask, report);
   }
+  
   {
     autoc szName = string("Diagonally placed boxes");
     autoc aPointDiag_100M = GenerateGeometry<N, vector<BoundingBoxND<N>>>([&] { return CreateBoxes_Diagonal<N, 100 * N1M>(); }, szName, 100, report);

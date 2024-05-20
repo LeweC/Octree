@@ -2,6 +2,9 @@
 
 using namespace OrthoTree;
 
+using std::array;
+using std::vector;
+
 #ifdef _M_X64
 
 namespace PerformaceTest
@@ -18,28 +21,27 @@ namespace PerformaceTest
   template<size_t nDim>
   static constexpr BoundingBoxND<nDim> CreateBox(PointND<nDim> const& pt, double size)
   {
-    using Ad = AdaptorGeneral<nDim, PointND<nDim>, BoundingBoxND<nDim>>;
-    auto box = BoundingBoxND<nDim>{ pt, pt };
-    auto& ptMax = Ad::box_max(box);
+    using Ad = AdaptorGeneral<nDim, PointND<nDim>, BoundingBoxND<nDim>, RayND<nDim>, PlaneND<nDim>>;
+    auto Box = BoundingBoxND<nDim>{ pt, pt };
     for (size_t iDim = 0; iDim < nDim; ++iDim)
-      Ad::point_comp(ptMax, static_cast<dim_type>(iDim)) += size;
+      Ad::SetBoxMaxC(Box, static_cast<dim_t>(iDim), Ad::GetBoxMinC(Box, static_cast<dim_t>(iDim)) + size);
 
-    return box;
+    return Box;
   }
 
 
-  template<dim_type nDim>
+  template<dim_t nDim>
   static BoundingBoxND<nDim> CreateSearcBox(double rBegin, double rSize)
   {
     auto pt = PointND<nDim>{};
-    for (dim_type iDim = 0; iDim < nDim; ++iDim)
+    for (dim_t iDim = 0; iDim < nDim; ++iDim)
       pt[iDim] = rBegin;
 
     return CreateBox<nDim>(pt, rSize);
   }
 
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<PointND<nDim>> CreatePoints()
   {
     auto aPoint = vector<PointND<nDim>>(nNumber);
@@ -50,13 +52,13 @@ namespace PerformaceTest
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
         aPoint[iNumber][iDim] = rMax;
 
       if (iNumber == nNumber)
         return aPoint;
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aPoint[iNumber][iDim] = rMax;
 
       ++iNumber;
@@ -67,7 +69,7 @@ namespace PerformaceTest
       autoc nRemain = nNumber - iNumber;
       autoc rStep = rMax / (nRemain + 2);
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
-        for (dim_type iDim = 0; iDim < nDim; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim; ++iDim)
           aPoint[nNumber - iNumber - 1][iDim] = iRemain * rStep;
 
     }
@@ -75,7 +77,7 @@ namespace PerformaceTest
     return aPoint;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<PointND<nDim>> CreateRandomPoints()
   {
     auto aPoint = vector<PointND<nDim>>(nNumber);
@@ -86,13 +88,13 @@ namespace PerformaceTest
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
         aPoint[iNumber][iDim] = rMax;
 
       if (iNumber == nNumber)
         return aPoint;
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aPoint[iNumber][iDim] = rMax;
 
       ++iNumber;
@@ -101,7 +103,7 @@ namespace PerformaceTest
     srand(0);
     {
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
-        for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
           aPoint[nNumber - iNumber - 1][iDim] = (rand() % 100) * (rMax / 100.0);
 
     }
@@ -110,7 +112,7 @@ namespace PerformaceTest
   }
 
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<BoundingBoxND<nDim>> CreateBoxes()
   {
     if constexpr (nNumber == 0)
@@ -126,7 +128,7 @@ namespace PerformaceTest
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
       {
         aBox[iNumber].Min[iDim] = rMax - rUnit;
         aBox[iNumber] = CreateBox(aBox[iNumber].Min, rUnit);
@@ -135,7 +137,7 @@ namespace PerformaceTest
         return aBox;
 
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aBox[iNumber].Min[iDim] = rMax - rUnit;
 
       aBox[iNumber] = CreateBox(aBox[iNumber].Min, rUnit);
@@ -150,7 +152,7 @@ namespace PerformaceTest
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
       {
         autoc iNumberBox = nNumber - iNumber - 1;
-        for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
           aBox[iNumberBox].Min[iDim] = iRemain * rStep;
 
         aBox[iNumberBox] = CreateBox(aBox[iNumberBox].Min, rUnit);
@@ -160,7 +162,7 @@ namespace PerformaceTest
     return aBox;
   }
 
-  template<dim_type nDim, size_t nNumber>
+  template<dim_t nDim, size_t nNumber>
   static vector<BoundingBoxND<nDim>> CreateRandomBoxes()
   {
     if constexpr (nNumber == 0)
@@ -176,7 +178,7 @@ namespace PerformaceTest
 
     // Corner points
     {
-      for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
+      for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim, ++iNumber)
       {
         aBox[iNumber].Min[iDim] = rMax - rUnit;
         aBox[iNumber] = CreateBox(aBox[iNumber].Min, rUnit);
@@ -185,7 +187,7 @@ namespace PerformaceTest
         return aBox;
 
 
-      for (dim_type iDim = 0; iDim < nDim; ++iDim)
+      for (dim_t iDim = 0; iDim < nDim; ++iDim)
         aBox[iNumber].Min[iDim] = rMax - rUnit;
 
       aBox[iNumber] = CreateBox(aBox[iNumber].Min, rUnit);
@@ -199,7 +201,7 @@ namespace PerformaceTest
       for (size_t iRemain = 1; iNumber < nNumber; ++iNumber, ++iRemain)
       {
         autoc iNumberBox = nNumber - iNumber - 1;
-        for (dim_type iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
+        for (dim_t iDim = 0; iDim < nDim && iNumber < nNumber; ++iDim)
           aBox[iNumberBox].Min[iDim] = (rand() % 100) * (rMax / 100.0);
 
         aBox[iNumberBox] = CreateBox(aBox[iNumberBox].Min, (rand() % 100) * (4.0 * rUnit / 100.0));
@@ -257,16 +259,16 @@ namespace PerformaceTest
   {
   private:
 
-    template<dim_type nDim>
-    static TreePointND<nDim> CreateTest(depth_type depth, std::span<PointND<nDim> const> const& aPoint, bool fPar = false)
+    template<dim_t nDim>
+    static TreePointND<nDim> CreateTest(depth_t depth, std::span<PointND<nDim> const> const& aPoint, bool fPar = false)
     {
-      autoc box = CreateSearcBox<nDim>(0.0, rMax);
+      autoc Box = CreateSearcBox<nDim>(0.0, rMax);
 
       auto nt = TreePointND<nDim>{};
       if (fPar)
-        TreePointND<nDim>::template Create<std::execution::parallel_unsequenced_policy>(nt, aPoint, depth, box);
+        TreePointND<nDim>::template Create<std::execution::parallel_unsequenced_policy>(nt, aPoint, depth, Box);
       else
-        TreePointND<nDim>::Create(nt, aPoint, depth, box);
+        TreePointND<nDim>::Create(nt, aPoint, depth, Box);
 
       return nt;
     }
@@ -310,16 +312,16 @@ namespace PerformaceTest
   TEST_CLASS(BoxTest)
   {
   private:
-    template<dim_type nDim>
-    static auto CreateTest(depth_type depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool fPar = false)
+    template<dim_t nDim>
+    static auto CreateTest(depth_t depth, std::span<BoundingBoxND<nDim> const> const& aBox, bool fPar = false)
     {
-      autoc box = CreateSearcBox<nDim>(0.0, rMax);
+      autoc Box = CreateSearcBox<nDim>(0.0, rMax);
 
       auto nt = TreeBoxND<nDim>{};
       if (fPar)
-        TreeBoxND<nDim>::template Create<std::execution::parallel_unsequenced_policy>(nt, aBox, depth, box);
+        TreeBoxND<nDim>::template Create<std::execution::parallel_unsequenced_policy>(nt, aBox, depth, Box);
       else
-        TreeBoxND<nDim>::Create(nt, aBox, depth, box);
+        TreeBoxND<nDim>::Create(nt, aBox, depth, Box);
 
       return nt;
     }
