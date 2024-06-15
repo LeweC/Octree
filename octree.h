@@ -264,26 +264,113 @@ namespace OrthoTree
 
     static constexpr TGeometry Size(TVector const& point) noexcept { return std::sqrt(Size2(point)); }
 
-    static constexpr geometry_type pose_size(vector_type const& pt) noexcept
+    static constexpr TGeometry pose_size(TVector const& pt) noexcept
     {
-      auto d2 = geometry_type{ 0 };
-      auto angle_dis = geometry_type{ 0 };
-      for (dim_type iDim = 0; iDim < nDimension; ++iDim)
+      auto d2 = TGeometry{ 0 };
+      auto angle_dis = TGeometry{ 0 };
+      for (dim_t iDim = 0; iDim < DIMENSION_NO; ++iDim)
       {
         if (iDim < 3)
         {
-          autoc d = base::point_comp_c(pt, iDim);
+          autoc d = Base::GetPointC(pt, iDim);
           d2 += d * d;
         }
         else
         {
-          angle_dis += base::point_comp_c(pt, iDim);
+          angle_dis += Base::GetPointC(pt, iDim);
         }
       }
       autoc translation_part = sqrt(d2);
       autoc orientation_part = angle_dis / 3;
 
       return translation_part + orientation_part;
+    }
+
+    static constexpr TGeometry translational_distance(TVector const& pt) noexcept
+    {
+      int trans_end = 0;
+      if (DIMENSION_NO == 3)
+      {
+        trans_end = 2;
+      }
+      else if (DIMENSION_NO == 6)
+      {
+        trans_end = 3;
+      }
+      else if (DIMENSION_NO == 7)
+      {
+        trans_end = 3;
+      }
+      else if (DIMENSION_NO == 2)
+      {
+        trans_end = 1;
+      }
+      if (trans_end == 0)
+      {
+        exit(0);
+      }
+
+      auto d2 = TGeometry{ 0 };
+      for (dim_t iDim = 0; iDim < trans_end; ++iDim)
+      {
+        autoc d = Base::GetPointC(pt, iDim);
+        d2 += d * d;
+      }
+      return sqrt(d2);
+    }
+
+    static constexpr TGeometry rotaional_distance_extra(TVector const& ptL, TVector const& ptR) noexcept
+    {
+      int rot_begin = 0;
+      int rot_end = 0;
+      if (DIMENSION_NO == 3)
+      {
+        rot_begin = 2;
+        rot_end = 3;
+      }
+      else if (DIMENSION_NO == 6)
+      {
+        rot_begin = 3;
+        rot_end = 6;
+      }
+      else if (DIMENSION_NO == 2)
+      {
+        rot_begin = 1;
+        rot_end = 2;
+      }
+      if (rot_begin == 0 || rot_end == 0)
+      {
+        exit(0);
+      }
+
+      auto diff_end = TGeometry{ 0 };
+      for (dim_t iDim = rot_begin; iDim < rot_end; ++iDim)
+      {
+        auto diff = abs(Base::GetPointC(ptL, iDim) - Base::GetPointC(ptR, iDim));
+        if (diff > 180)
+        {
+          if (Base::GetPointC(ptL, iDim) < Base::GetPointC(ptR, iDim))
+          {
+            diff_end += abs((Base::GetPointC(ptL, iDim) + 360.0) - Base::GetPointC(ptR, iDim));
+          }
+          else
+          {
+            diff_end += abs(Base::GetPointC(ptL, iDim) - (Base::GetPointC(ptR, iDim) + 360.0));
+          }
+        }
+        else
+        {
+          diff_end += diff;
+        }
+      }
+      return (diff_end / (rot_end - rot_begin));
+    }
+
+    static constexpr TGeometry pose_distance_extra(TVector const& ptL, TVector const& ptR) noexcept
+    {
+      autoc trans_distance = translational_distance(Subtract(ptL, ptR));
+      autoc rot_distance = rotaional_distance_extra(ptL, ptR);
+      return (trans_distance + rot_distance);
     }
 
     static constexpr TVector Add(TVector const& ptL, TVector const& ptR) noexcept
@@ -2499,140 +2586,189 @@ namespace OrthoTree
   };
 
   //START ALGOV2
-  template<dim_type nDimension, typename vector_type, typename box_type, typename adaptor_type = AdaptorGeneral<nDimension, vector_type, box_type, double>, typename geometry_type = double>
-  class OrthoRotationalTreePointV2 : public OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>
+  // OrthoTreePoint: Non-owning container which spatially organize point ids in N dimension space into a hash-table by Morton Z order.
+  template<
+    dim_t DIMENSION_NO,
+    typename TVector_,
+    typename TBox_,
+    typename TRay_,
+    typename TPlane_,
+    typename TGeometry_ = double,
+    typename TAdapter = AdaptorGeneral<DIMENSION_NO, TVector_, TBox_, TRay_, TPlane_, TGeometry_>>
+  class OrthoTreePointPose final : public OrthoTreeBase<DIMENSION_NO, TVector_, TBox_, TRay_, TPlane_, TGeometry_, TAdapter>
   {
   protected:
-    using base = OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>;
-    using EntityDistance = typename base::EntityDistance;
-    using BoxDistance = typename base::BoxDistance;
+    using Base = OrthoTreeBase<DIMENSION_NO, TVector_, TBox_, TRay_, TPlane_, TGeometry_, TAdapter>;
+    using EntityDistance = typename Base::EntityDistance;
+    using BoxDistance = typename Base::BoxDistance;
 
   public:
-    using AD = typename base::AD;
-    using morton_grid_id_type = typename base::morton_grid_id_type;
-    using morton_grid_id_type_cref = typename base::morton_grid_id_type_cref;
-    using morton_node_id_type = typename base::morton_node_id_type;
-    using morton_node_id_type_cref = typename base::morton_node_id_type_cref;
-    using max_element_type = typename base::max_element_type;
-    using child_id_type = typename base::child_id_type;
+    using AD = typename Base::AD;
+    using MortonGridID = typename Base::MortonGridID;
+    using MortonGridIDCR = typename Base::MortonGridIDCR;
+    using MortonNodeID = typename Base::MortonNodeID;
+    using MortonNodeIDCR = typename Base::MortonNodeIDCR;
+    using ChildID = typename Base::ChildID;
 
-    using Node = typename base::Node;
+    using Node = typename Base::Node;
 
-    static constexpr max_element_type max_element_default = 21;
+    using TGeometry = TGeometry_;
+    using TVector = TVector_;
+    using TBox = TBox_;
+    using TRay = TRay_;
+    using TPlane = TPlane_;
 
-  protected: // Aid functions
+    static constexpr std::size_t DEFAULT_MAX_ELEMENT = 21;
 
-    using LocationIterator = typename vector<std::pair<entity_id_type, morton_grid_id_type>>::iterator;
-    void addNodes(Node& nodeParent, morton_node_id_type_cref kParent, LocationIterator& itEndPrev, LocationIterator const& itEnd, morton_grid_id_type_cref idLocationBegin, depth_type nDepthRemain) noexcept
+  private: // Aid functions
+    struct Location
     {
-      autoc nElement = std::distance(itEndPrev, itEnd);
-      if (nElement < this->m_nElementMax || nDepthRemain == 0)
+      std::size_t EntityID;
+      MortonGridID GridID;
+    };
+
+    using LocationIterator = typename std::vector<Location>::iterator;
+    void addNodes(
+      Node& parentNode,
+      MortonNodeIDCR parentKey,
+      LocationIterator& locationBeginIterator,
+      LocationIterator const& locationEndIterator,
+      MortonGridIDCR gridID,
+      depth_t remainingDepth) noexcept
+    {
+      std::size_t const elementNo = std::distance(locationBeginIterator, locationEndIterator);
+      if (elementNo < this->m_maxElementNo || remainingDepth == 0)
       {
-        nodeParent.vid.resize(nElement);
-        std::transform(itEndPrev, itEnd, std::begin(nodeParent.vid), [](autoc& item) { return item.first; });
-        itEndPrev = itEnd;
+        parentNode.Entities.resize(elementNo);
+        std::transform(locationBeginIterator, locationEndIterator, parentNode.Entities.begin(), [](autoc& item) { return item.EntityID; });
+        locationBeginIterator = locationEndIterator;
         return;
       }
 
-      --nDepthRemain;
-      autoc shift = nDepthRemain * nDimension;
-      autoc nLocationStep = morton_grid_id_type{ 1 } << shift;
-      autoc flagParent = kParent << nDimension;
+      --remainingDepth;
+      autoc shift = remainingDepth * DIMENSION_NO;
+      autoc stepNo = MortonGridID{ 1 } << shift;
+      autoc parentKeyFlag = parentKey << DIMENSION_NO;
 
-      while (itEndPrev != itEnd)
+      while (locationBeginIterator != locationEndIterator)
       {
-        autoc idChildActual = base::convertMortonIdToChildId((itEndPrev->second - idLocationBegin) >> shift);
-        autoc itEndActual = std::partition_point(itEndPrev, itEnd, [&](autoc& idPoint)
-        {
-          return idChildActual == base::convertMortonIdToChildId((idPoint.second - idLocationBegin) >> shift);
+        autoc actualChildID = Base::castMortonIdToChildId((locationBeginIterator->GridID - gridID) >> shift);
+        autoc actualEndIterator = std::partition_point(locationBeginIterator, locationEndIterator, [&](autoc& location) {
+          return actualChildID == Base::castMortonIdToChildId((location.GridID - gridID) >> shift);
         });
 
-        autoc mChildActual = morton_grid_id_type(idChildActual);
-        morton_grid_id_type const kChild = flagParent | mChildActual;
-        morton_grid_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
+        autoc actualChildGridID = MortonGridID(actualChildID);
+        MortonGridID const childKey = parentKeyFlag | actualChildGridID;
+        MortonGridID const beginChildGridID = gridID + actualChildGridID * stepNo;
 
-        auto& nodeChild = this->createChild(nodeParent, idChildActual, kChild);
-        this->addNodes(nodeChild, kChild, itEndPrev, itEndActual, idLocationBeginChild, nDepthRemain);
+        parentNode.AddChild(childKey);
+        auto& childNode = this->createChild(parentNode, actualChildID, childKey);
+        this->addNodes(childNode, childKey, locationBeginIterator, actualEndIterator, beginChildGridID, remainingDepth);
       }
     }
 
 
   public: // Create
-
     // Ctors
-    OrthoRotationalTreePointV2() = default;
-    OrthoRotationalTreePointV2(span<vector_type const> const& vpt, depth_type nDepthMax, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
+    OrthoTreePointPose() = default;
+    OrthoTreePointPose(
+      std::span<TVector const> const& points,
+      std::optional<depth_t> maxDepthNoIn = std::nullopt,
+      std::optional<TBox> const& boxSpaceOptional = std::nullopt,
+      std::size_t maxElementNoInNode = DEFAULT_MAX_ELEMENT) noexcept
     {
-      Create(*this, vpt, nDepthMax, oBoxSpace, nElementMaxInNode);
+      Create(*this, points, maxDepthNoIn, boxSpaceOptional, maxElementNoInNode);
     }
 
     // Create
-    template<typename execution_policy_type = std::execution::unsequenced_policy>
-    static void Create(OrthoRotationalTreePointV2& tree, span<vector_type const> const& vpt, depth_type nDepthMaxIn = 0, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
+    template<typename TExecutionPolicy = std::execution::unsequenced_policy>
+    static void Create(
+      OrthoTreePointPose& tree,
+      std::span<TVector const> const& points,
+      std::optional<depth_t> maxDepthNoIn = std::nullopt,
+      std::optional<TBox> const& boxSpaceOptional = std::nullopt,
+      std::size_t maxElementNoInNode = DEFAULT_MAX_ELEMENT) noexcept
     {
-      autoc boxSpace = oBoxSpace.has_value() ? *oBoxSpace : AD::box_of_points(vpt);
-      autoc n = vpt.size();
+      autoc boxSpace = boxSpaceOptional.has_value() ? *boxSpaceOptional : AD::GetBoxOfPoints(points);
+      autoc pointNo = points.size();
 
-      autoc nDepthMax = nDepthMaxIn == 0 ? base::EstimateMaxDepth(n, nElementMaxInNode) : nDepthMaxIn;
-      tree.Init(boxSpace, nDepthMax, nElementMaxInNode);
-      base::reserveContainer(tree.m_nodes, base::EstimateNodeNumber(n, nDepthMax, nElementMaxInNode));
-      if (vpt.empty())
+      autoc maxDepthNo = (!maxDepthNoIn || maxDepthNoIn == 0) ? Base::EstimateMaxDepth(pointNo, maxElementNoInNode) : *maxDepthNoIn;
+      tree.Init(boxSpace, maxDepthNo, maxElementNoInNode);
+      Base::reserveContainer(tree.m_nodes, Base::EstimateNodeNumber(pointNo, maxDepthNo, maxElementNoInNode));
+      if (points.empty())
         return;
 
-      autoc kRoot = base::GetRootKey();
-      auto& nodeRoot = cont_at(tree.m_nodes, kRoot);
-
-
-      // Generate Morton location ids
-      autoc vidPoint = base::generatePointId(n);
-      auto aidLocation = vector<std::pair<entity_id_type, morton_grid_id_type>>(n);
-
-      auto ept = execution_policy_type{}; // GCC 11.3 only accept in this form
-      std::transform(ept, vpt.begin(), vpt.end(), vidPoint.begin(), aidLocation.begin(), [&](autoc& pt, autoc id) -> std::pair<entity_id_type, morton_grid_id_type>
-      {
-        return { id, tree.getLocationId(pt) };
+      auto pointLocations = std::vector<Location>(pointNo);
+      auto ept = TExecutionPolicy{}; // GCC 11.3 only accept in this form
+      std::transform(ept, points.begin(), points.end(), pointLocations.begin(), [&](autoc& point) {
+        std::size_t const id = std::distance(&points[0], &point);
+        return Location{ id, tree.getLocationID(point) };
       });
 
-      auto eps = execution_policy_type{}; // GCC 11.3 only accept in this form
-      std::sort(eps, std::begin(aidLocation), std::end(aidLocation), [&](autoc& idL, autoc& idR) { return idL.second < idR.second; });
-      auto itBegin = std::begin(aidLocation);
-      tree.addNodes(nodeRoot, kRoot, itBegin, std::end(aidLocation), morton_node_id_type{ 0 }, nDepthMax);
+      auto eps = TExecutionPolicy{}; // GCC 11.3 only accept in this form
+      std::sort(eps, pointLocations.begin(), pointLocations.end(), [&](autoc& leftLocation, autoc& rightLocation) {
+        return leftLocation.GridID < rightLocation.GridID;
+      });
+
+      autoc rootKey = Base::GetRootKey();
+      auto& nodeRoot = cont_at(tree.m_nodes, rootKey);
+
+      auto beginIterator = pointLocations.begin();
+      tree.addNodes(nodeRoot, rootKey, beginIterator, pointLocations.end(), MortonNodeID{ 0 }, maxDepthNo);
     }
 
-
-
   public: // Edit functions
-
-    // Insert item into a node. If fInsertToLeaf is true: The smallest node will be chosen by the max depth. If fInsertToLeaf is false: The smallest existing level on the branch will be chosen.
-    bool Insert(entity_id_type id, vector_type const& pt, bool fInsertToLeaf = false) noexcept
+    bool InsertWithRebalancing(std::size_t newEntityID, TVector const& newPoint, std::span<TVector const> const& points) noexcept
     {
-      if (!AD::does_box_contain_point(this->m_box, pt))
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
         return false;
 
-      autoc kNodeSmallest = FindSmallestNode(pt);
-      if (!base::IsValidKey(kNodeSmallest))
+      autoc[entityDepth, entityLocation] = this->getDepthAndLocationID(newPoint);
+      autoc entityNodeKey = Base::GetHash(entityDepth, entityLocation);
+      autoc[parentNodeKey, parentDepthID] = this->FindSmallestNodeKeyWithDepth(entityNodeKey);
+      if (!Base::IsValidKey(parentNodeKey))
         return false;
 
-      autoc idLocation = this->getLocationId(pt);
-      autoc kNode = this->GetHash(this->m_nDepthMax, idLocation);
+      return this->template insertWithRebalancing<TVector, true>(parentNodeKey, parentDepthID, entityNodeKey, entityDepth, newEntityID, points);
+    }
 
-      return this->template insert<true>(kNode, kNodeSmallest, id, fInsertToLeaf);
+    // Insert item into a node. If doInsertToLeaf is true: The smallest node will be chosen by the max depth. If doInsertToLeaf is false: The smallest existing level on the branch will be chosen.
+    bool Insert(std::size_t entityID, TVector const& newPoint, bool doInsertToLeaf = false) noexcept
+    {
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
+        return false;
+
+      autoc entityNodeKey = this->GetNodeID(newPoint);
+      autoc smallestNodeKey = this->FindSmallestNodeKey(entityNodeKey);
+      if (!Base::IsValidKey(smallestNodeKey))
+        return false;
+
+      return this->template insertWithoutRebalancing<true>(smallestNodeKey, entityNodeKey, entityID, doInsertToLeaf);
     }
 
     // Erase an id. Traverse all node if it is needed, which has major performance penalty.
-    template<bool fReduceIds = true>
-    constexpr bool EraseId(entity_id_type idErase) noexcept
+    template<bool DO_UPDATE_ENTITY_IDS = true>
+    constexpr bool EraseId(std::size_t entityID) noexcept
     {
-      autoc fErased = std::ranges::any_of(this->m_nodes, [&](auto& pairNode) { return erase(pairNode.second.vid, idErase); });
-      if (!fErased)
+      bool isErased = false;
+      for (auto& [nodeKey, node] : this->m_nodes)
+      {
+        if (std::erase(node.Entities, entityID))
+        {
+          this->removeNodeIfPossible(nodeKey, node);
+          isErased = true;
+          break;
+        }
+      }
+
+      if (!isErased)
         return false;
 
-      if constexpr (fReduceIds)
+      if constexpr (DO_UPDATE_ENTITY_IDS)
       {
-        std::ranges::for_each(this->m_nodes, [idErase](auto& pairNode)
-        {
-          for (auto& id : pairNode.second.vid)
-            id -= idErase < id;
+        std::ranges::for_each(this->m_nodes, [entityID](auto& pairNode) {
+          for (auto& id : pairNode.second.Entities)
+            id -= entityID < id;
         });
       }
 
@@ -2640,234 +2776,267 @@ namespace OrthoTree
     }
 
     // Erase id, aided with the original point
-    template<bool fReduceIds = true>
-    bool Erase(entity_id_type idErase, vector_type const& pt) noexcept
+    template<bool DO_UPDATE_ENTITY_IDS = true>
+    bool Erase(std::size_t entitiyID, TVector const& entityOriginalPoint) noexcept
     {
-      autoc kOld = FindSmallestNode(pt);
-      if (!base::IsValidKey(kOld))
+      autoc nodeKey = this->FindSmallestNode(entityOriginalPoint);
+      if (!Base::IsValidKey(nodeKey))
         return false; // old box is not in the handled space domain
 
-      auto& vid = cont_at(this->m_nodes, kOld).vid;
-      autoc itRemove = std::remove(std::begin(vid), std::end(vid), idErase);
-      if (itRemove == end(vid))
+      auto& node = this->m_nodes.at(nodeKey);
+      autoc endIteratorAfterRemove = std::remove(node.Entities.begin(), node.Entities.end(), entitiyID);
+      if (endIteratorAfterRemove == node.Entities.end())
         return false; // id was not registered previously.
 
-      vid.erase(itRemove, vid.end());
+      node.Entities.erase(endIteratorAfterRemove, node.Entities.end());
 
-      if constexpr (fReduceIds)
+      if constexpr (DO_UPDATE_ENTITY_IDS)
       {
-        std::ranges::for_each(this->m_nodes, [idErase](auto& pairNode)
-        {
-          for (auto& id : pairNode.second.vid)
-            id -= idErase < id;
+        std::ranges::for_each(this->m_nodes, [entitiyID](auto& pairNode) {
+          for (auto& id : pairNode.second.Entities)
+            id -= entitiyID < id;
         });
       }
+
+      this->removeNodeIfPossible(nodeKey, node);
 
       return true;
     }
 
 
     // Update id by the new point information
-    bool Update(entity_id_type id, vector_type const& ptNew, bool fInsertToLeaf = false) noexcept
+    bool Update(std::size_t entityID, TVector const& newPoint, bool doesInsertToLeaf = false) noexcept
     {
-      if (!AD::does_box_contain_point(this->m_box, ptNew))
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
         return false;
 
-      if (!this->EraseId<false>(id))
+      if (!this->EraseId<false>(entityID))
         return false;
 
-      return this->Insert(id, ptNew, fInsertToLeaf);
+      return this->Insert(entityID, newPoint, doesInsertToLeaf);
     }
 
 
     // Update id by the new point information and the erase part is aided by the old point geometry data
-    bool Update(entity_id_type id, vector_type const& ptOld, vector_type const& ptNew, bool fInsertToLeaf = false) noexcept
+    bool Update(std::size_t entityID, TVector const& oldPoint, TVector const& newPoint, bool doesInsertToLeaf = false) noexcept
     {
-      if (!AD::does_box_contain_point(this->m_box, ptNew))
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
         return false;
 
-      if (!this->Erase<false>(id, ptOld))
+      if (!this->Erase<false>(entityID, oldPoint))
         return false;
 
-      return this->Insert(id, ptNew, fInsertToLeaf);
+      return this->Insert(entityID, newPoint, doesInsertToLeaf);
     }
 
+
+    // Update id with rebalancing by the new point information
+    bool Update(std::size_t entityID, TVector const& newPoint, std::span<TVector const> const& points) noexcept
+    {
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
+        return false;
+
+      if (!this->EraseId<false>(entityID))
+        return false;
+
+      return this->InsertWithRebalancing(entityID, newPoint, points);
+    }
+
+
+    // Update id with rebalacing by the new point information and the erase part is aided by the old point geometry data
+    bool Update(std::size_t entityID, TVector const& oldPoint, TVector const& newPoint, std::span<TVector const> const& points) noexcept
+    {
+      if (!AD::DoesBoxContainPoint(this->m_boxSpace, newPoint))
+        return false;
+
+      if (!this->Erase<false>(entityID, oldPoint))
+        return false;
+
+      return this->InsertWithRebalancing(entityID, newPoint, points);
+    }
 
   public: // Search functions
-
-    // Find smallest node which contains the box
-    morton_node_id_type FindSmallestNode(vector_type const& pt) const noexcept
+    bool Contains(TVector const& searchPoint, std::span<TVector const> const& points, TGeometry tolerance) const noexcept
     {
-      if (!AD::does_box_contain_point(this->m_box, pt))
-        return morton_node_id_type{};
-
-      autoc idLocation = this->getLocationId(pt);
-      return this->FindSmallestNodeKey(this->GetHash(this->m_nDepthMax, idLocation));
-    }
-
-    bool Contains(vector_type const& pt, span<vector_type const> const& vpt, geometry_type rAccuracy) const noexcept
-    {
-      autoc kSmallestNode = this->FindSmallestNode(pt);
-      if (!base::IsValidKey(kSmallestNode))
+      autoc smallestNodeKey = this->FindSmallestNode(searchPoint);
+      if (!Base::IsValidKey(smallestNodeKey))
         return false;
 
-      autoc& node = cont_at(this->m_nodes, kSmallestNode);
-      return std::ranges::any_of(node.vid, [&](autoc& id) { return AD::are_points_equal(pt, vpt[id], rAccuracy); });
+      autoc& node = this->GetNode(smallestNodeKey);
+      return std::ranges::any_of(node.Entities, [&](autoc& entityID) { return AD::ArePointsEqual(searchPoint, points[entityID], tolerance); });
     }
-
 
     // Range search
-    template<bool fLeafNodeContainsElementOnly = false>
-    vector<entity_id_type> RangeSearch(box_type const& range, span<vector_type const> const& vpt) const noexcept
+    template<bool DOES_LEAF_NODE_CONTAIN_ELEMENT_ONLY = false>
+    std::vector<std::size_t> RangeSearch(TBox const& range, std::span<TVector const> const& points) const noexcept
     {
-      auto sidFound = vector<entity_id_type>();
+      auto foundEntityIDs = std::vector<std::size_t>();
 
-      if (!this->template rangeSearchRoot<vector_type, false, false, fLeafNodeContainsElementOnly, false>(range, vpt, sidFound))
+      if (!this->template rangeSearchRoot<TVector, false, false, DOES_LEAF_NODE_CONTAIN_ELEMENT_ONLY, false>(range, points, foundEntityIDs))
         return {};
 
-      return sidFound;
+      return foundEntityIDs;
+    }
+
+    // Hyperplane intersection (Plane equation: dotProduct(planeNormal, point) = distanceOfOrigo)
+    inline std::vector<std::size_t> PlaneSearch(
+      TGeometry const& distanceOfOrigo, TVector const& planeNormal, TGeometry tolerance, std::span<TVector const> const& points) const noexcept
+    {
+      return this->template planeIntersection<TVector>(distanceOfOrigo, planeNormal, tolerance, points);
+    }
+
+    // Hyperplane intersection using built-in plane
+    inline std::vector<std::size_t> PlaneSearch(TPlane const& plane, TGeometry tolerance, std::span<TVector const> const& points) const noexcept
+    {
+      return this->template planeIntersection<TVector>(AD::GetPlaneOrigoDistance(plane), AD::GetPlaneNormal(plane), tolerance, points);
+    }
+
+    // Hyperplane segmentation, get all elements in positive side (Plane equation: dotProduct(planeNormal, point) = distanceOfOrigo)
+    inline std::vector<std::size_t> PlanePositiveSegmentation(
+      TGeometry distanceOfOrigo, TVector const& planeNormal, TGeometry tolerance, std::span<TVector const> const& points) const noexcept
+    {
+      return this->template planePositiveSegmentation<TVector>(distanceOfOrigo, planeNormal, tolerance, points);
+    }
+
+    // Hyperplane segmentation, get all elements in positive side (Plane equation: dotProduct(planeNormal, point) = distanceOfOrigo)
+    inline std::vector<std::size_t> PlanePositiveSegmentation(TPlane const& plane, TGeometry tolerance, std::span<TVector const> const& points) const noexcept
+    {
+      return this->template planePositiveSegmentation<TVector>(AD::GetPlaneOrigoDistance(plane), AD::GetPlaneNormal(plane), tolerance, points);
+    }
+
+    // Hyperplane segmentation, get all elements in positive side (Plane equation: dotProduct(planeNormal, point) = distanceOfOrigo)
+    inline std::vector<std::size_t> FrustumCulling(
+      std::span<TPlane const> const& boundaryPlanes, TGeometry tolerance, std::span<TVector const> const& points) const noexcept
+    {
+      return this->template frustumCulling<TVector>(boundaryPlanes, tolerance, points);
     }
 
 
-  private: //My V2KNN
-
-    static geometry_type getBoxWallDistance(vector_type const& pt, box_type const& box) noexcept
+  private: // K Nearest Neighbor helpers
+    static TGeometry getMinBoxWallDistance(TVector const& point, TBox const& box) noexcept
     {
-      autoc& ptMin = AD::box_min_c(box);
-      autoc& ptMax = AD::box_max_c(box);
-
-      auto vDist = vector<geometry_type>();
-      vDist.reserve(nDimension);
-      for (dim_type iDim = 0; iDim < nDimension; ++iDim)
+      auto distances = std::vector<TGeometry>();
+      distances.reserve(DIMENSION_NO);
+      for (dim_t dimensionID = 0; dimensionID < DIMENSION_NO; ++dimensionID)
       {
-        autoc rDistActual = vDist.emplace_back(std::min(
-          abs(AD::point_comp_c(pt, iDim) - AD::point_comp_c(ptMin, iDim)),
-          abs(AD::point_comp_c(pt, iDim) - AD::point_comp_c(ptMax, iDim))
-        ));
+        autoc actualDistance = distances.emplace_back(std::min(
+          std::abs(AD::GetPointC(point, dimensionID) - AD::GetBoxMinC(box, dimensionID)),
+          std::abs(AD::GetPointC(point, dimensionID) - AD::GetBoxMaxC(box, dimensionID))));
 
-        if (rDistActual == 0)
+        if (actualDistance == 0)
           return 0.0;
       }
 
-      return *std::ranges::min_element(vDist);
+      return *std::ranges::min_element(distances);
     }
 
 
-    static void createEntityDistance(Node const& node, vector_type const& pt, span<vector_type const> const& vpt, multiset<EntityDistance>& setEntity) noexcept
+    static void createEntityDistance(
+      Node const& node, TVector const& searchPoint, std::span<TVector const> const& points, std::multiset<EntityDistance>& neighborEntities) noexcept
     {
-      for (autoc id : node.vid)
-      {
-        setEntity.insert({ { AD::pose_distance_extra(pt, vpt[id]) }, id });
-      }
+      for (autoc id : node.Entities)
+        neighborEntities.insert({ { AD::pose_distance_extra(searchPoint, points[id]) }, id });
     }
 
-    static geometry_type getFarestDistance(multiset<EntityDistance>& setEntity, size_t k) noexcept
+    static TGeometry getFarestDistance(std::multiset<EntityDistance>& neighborEntities, std::size_t neighborNo) noexcept
     {
-      if (setEntity.size() < k)
-        return std::numeric_limits<geometry_type>::max();
+      if (neighborEntities.size() < neighborNo)
+        return std::numeric_limits<TGeometry>::max();
 
-      return std::next(std::begin(setEntity), k - 1)->distance;
+      return std::next(neighborEntities.begin(), neighborNo - 1)->Distance;
     }
 
-    static vector<entity_id_type> convertEntityDistanceToList(multiset<EntityDistance>& setEntity, size_t k) noexcept
+    static std::vector<std::size_t> convertEntityDistanceToList(std::multiset<EntityDistance>& neighborEntities, std::size_t neighborNo) noexcept
     {
-      autoc nEntity = std::min(k, setEntity.size());
-      auto vidEntity = vector<entity_id_type>(nEntity);
-      std::transform(std::begin(setEntity), std::next(std::begin(setEntity), nEntity), std::begin(vidEntity), [](autoc& ed) { return ed.id; });
-      return vidEntity;
+      autoc entityNo = std::min(neighborNo, neighborEntities.size());
+      auto entityIDs = std::vector<std::size_t>(entityNo);
+      std::transform(neighborEntities.begin(), std::next(neighborEntities.begin(), entityNo), entityIDs.begin(), [](autoc& ed) { return ed.EntityID; });
+      return entityIDs;
     }
 
-   public:
-
+  public:
     // K Nearest Neighbor
-    vector<entity_id_type> GetNearestNeighbors(vector_type const& pt, size_t k, span<vector_type const> const& vpt) const noexcept
+    std::vector<std::size_t> GetNearestNeighbors(TVector const& searchPoint, std::size_t neighborNo, std::span<TVector const> const& points) const noexcept
     {
-      auto setEntity = multiset<EntityDistance>();
-      autoc kSmallestNode = FindSmallestNode(pt);
-      if (base::IsValidKey(kSmallestNode))
+      auto neighborEntities = std::multiset<EntityDistance>();
+      autoc smallestNodeKey = this->FindSmallestNode(searchPoint);
+      if (Base::IsValidKey(smallestNodeKey))
       {
-        autoc& nodeSmallest = cont_at(this->m_nodes, kSmallestNode);
-        autoc wallDist = getBoxWallDistance(pt, nodeSmallest.box);
-        createEntityDistance(nodeSmallest, pt, vpt, setEntity);
-        if (!nodeSmallest.IsAnyChildExist())
-          if (getFarestDistance(setEntity, k) < wallDist)
-            return convertEntityDistanceToList(setEntity, k);
+        autoc& smallestNode = this->GetNode(smallestNodeKey);
+        autoc wallDistance = getMinBoxWallDistance(searchPoint, smallestNode.Box);
+        createEntityDistance(smallestNode, searchPoint, points, neighborEntities);
+        if (!smallestNode.IsAnyChildExist())
+          if (getFarestDistance(neighborEntities, neighborNo) < wallDistance)
+            return convertEntityDistanceToList(neighborEntities, neighborNo);
       }
 
-      auto setNodeDist = multiset<BoxDistance>();
-      std::ranges::for_each(this->m_nodes, [&](autoc& pairKeyNode)
-      {
-        autoc& [key, node] = pairKeyNode;
-        if (node.vid.empty() || key == kSmallestNode)
+      auto nodeMinDistances = std::multiset<BoxDistance>();
+      std::ranges::for_each(this->m_nodes, [&](autoc& pairOfKeyAndNode) {
+        autoc & [key, node] = pairOfKeyAndNode;
+        if (node.Entities.empty() || key == smallestNodeKey)
           return;
 
-        autoc& ptMin = AD::box_min_c(node.box);
-        autoc& ptMax = AD::box_max_c(node.box);
-
-        auto aDist = vector_type{};
-        for (dim_type iDim = 0; iDim < nDimension; ++iDim)
+        auto aDist = TVector{};
+        for (dim_t dimensionID = 0; dimensionID < DIMENSION_NO; ++dimensionID)
         {
-          if (iDim < 3)
+          if (dimensionID < 3)
           {
-            autoc dMin = AD::point_comp_c(ptMin, iDim) - AD::point_comp_c(pt, iDim);
-            autoc dMax = AD::point_comp_c(ptMax, iDim) - AD::point_comp_c(pt, iDim);
+            auto dMin = AD::GetBoxMinC(node.Box, dimensionID) - AD::GetPointC(searchPoint, dimensionID);
+            auto dMax = AD::GetBoxMaxC(node.Box, dimensionID) - AD::GetPointC(searchPoint, dimensionID);
 
-            // If pt projection in iDim is within min and max the wall distance should be calculated.
-            AD::point_comp(aDist, iDim) = dMin * dMax < 0 ? 0 : std::min(abs(dMin), abs(dMax));
+            // If point projection in dimensionID is within min and max the wall distance should be calculated.
+            AD::SetPointC(aDist, dimensionID, dMin * dMax < 0 ? 0 : std::min(std::abs(dMin), std::abs(dMax)));
           }
           else
           {
-            auto dMin = AD::point_comp_c(ptMin, iDim) - AD::point_comp_c(pt, iDim);
-            auto dMax = AD::point_comp_c(ptMax, iDim) - AD::point_comp_c(pt, iDim);
-
-            //dMin for Angle
-            if (abs(dMin) > 180)
+            auto dMin = AD::GetBoxMinC(node.Box, dimensionID) - AD::GetPointC(searchPoint, dimensionID);
+            auto dMax = AD::GetBoxMaxC(node.Box, dimensionID) - AD::GetPointC(searchPoint, dimensionID);
+            
+            // For dMin angle
+            if (abs(dMin) > std::numbers::pi)
             {
-              //jump
-              if (AD::point_comp_c(ptMin, iDim) < AD::point_comp_c(pt, iDim))
+              if (AD::GetBoxMinC(node.Box, dimensionID) < AD::GetPointC(searchPoint, dimensionID))
               {
-                dMin = abs((AD::point_comp_c(ptMin, iDim) + 360.0) - AD::point_comp_c(pt, iDim));
+                dMin = abs(((AD::GetBoxMinC(node.Box, dimensionID) + (2 * std::numbers::pi))) - AD::GetPointC(searchPoint, dimensionID));
               }
               else
               {
-                dMin = abs(AD::point_comp_c(ptMin, iDim) - (AD::point_comp_c(pt, iDim) + 360.0));
+                dMin = abs(AD::GetBoxMinC(node.Box, dimensionID) - ((AD::GetPointC(searchPoint, dimensionID)+ (2 * std::numbers::pi))));
               }
             }
-
-            //dMax for angle
-            if (abs(dMax) > 180)
+            // For dMax angle
+            if (abs(dMax) > std::numbers::pi)
             {
-              if (AD::point_comp_c(ptMax, iDim) < AD::point_comp_c(pt, iDim))
+              if (AD::GetBoxMaxC(node.Box, dimensionID) < AD::GetPointC(searchPoint, dimensionID))
               {
-                dMax = abs((AD::point_comp_c(ptMax, iDim) + 360.0) - AD::point_comp_c(pt, iDim));
+                dMax = abs(((AD::GetBoxMaxC(node.Box, dimensionID)+ (2 * std::numbers::pi))) - AD::GetPointC(searchPoint, dimensionID));
               }
               else
               {
-                dMax = abs(AD::point_comp_c(ptMax, iDim) - (AD::point_comp_c(pt, iDim) + 360.0));
+                dMax = abs(AD::GetBoxMaxC(node.Box, dimensionID) - ((AD::GetPointC(searchPoint, dimensionID)+ (2 * std::numbers::pi))));
               }
             }
-            AD::point_comp(aDist, iDim) = dMin * dMax < 0 ? 0 : std::min(abs(dMin), abs(dMax));
+            AD::SetPointC(aDist, dimensionID, dMin * dMax < 0 ? 0 : std::min(std::abs(dMin), std::abs(dMax)));
           }
         }
-
-        setNodeDist.insert({ { AD::pose_size(aDist)}, key, node });
+        nodeMinDistances.insert({ { AD::pose_size(aDist) }, key, node });
       });
 
-      if (!setNodeDist.empty())
+      if (!nodeMinDistances.empty())
       {
-        auto rLatestNodeDist = getFarestDistance(setEntity, k);
-        for (autoc& nodeDist : setNodeDist)
+        auto rLatestNodeDist = getFarestDistance(neighborEntities, neighborNo);
+        for (autoc& nodeDist : nodeMinDistances)
         {
-          autoc n = setEntity.size();
-          if (k <= n && rLatestNodeDist < nodeDist.distance)
+          autoc n = neighborEntities.size();
+          if (neighborNo <= n && rLatestNodeDist < nodeDist.Distance)
             break;
 
-          createEntityDistance(nodeDist.node, pt, vpt, setEntity);
-          rLatestNodeDist = getFarestDistance(setEntity, k);
+          createEntityDistance(nodeDist.NodeReference, searchPoint, points, neighborEntities);
+          rLatestNodeDist = getFarestDistance(neighborEntities, neighborNo);
         }
       }
 
-      return convertEntityDistanceToList(setEntity, k);
+      return convertEntityDistanceToList(neighborEntities, neighborNo);
     }
   };
 
@@ -4070,8 +4239,7 @@ namespace OrthoTree
   using BoundingBox2D = OrthoTree::BoundingBoxND<2, BaseGeometryType>;
   using BoundingBox3D = OrthoTree::BoundingBoxND<3, BaseGeometryType>;
   using Ray2D = OrthoTree::RayND<2, BaseGeometryType>;
-  //Box Distance Algorithm or AlgoV2
-  template<size_t nDimension> using PoseTreePointV2ND = OrthoTree::OrthoRotationalTreePointV2<nDimension, OrthoTree::PointND<nDimension>, OrthoTree::BoundingBoxND<nDimension>>;
+
 
   using Ray3D = OrthoTree::RayND<3, BaseGeometryType>;
   using Plane2D = OrthoTree::PlaneND<2, BaseGeometryType>;
@@ -4096,6 +4264,14 @@ namespace OrthoTree
     TGeometry,
     SPLIT_DEPTH_INCREASEMENT>;
 
+  template<std::size_t DIMENSION_NO, typename TGeometry = BaseGeometryType>
+  using TreePointPoseND = OrthoTree::OrthoTreePointPose<
+    DIMENSION_NO,
+    OrthoTree::VectorND<DIMENSION_NO, TGeometry>,
+    OrthoTree::BoundingBoxND<DIMENSION_NO, TGeometry>,
+    OrthoTree::RayND<DIMENSION_NO, TGeometry>,
+    OrthoTree::PlaneND<DIMENSION_NO, TGeometry>,
+    TGeometry>;
   // Dualtree for points
   using DualtreePoint = TreePointND<1, BaseGeometryType>;
 
