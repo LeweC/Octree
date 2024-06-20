@@ -347,15 +347,15 @@ namespace OrthoTree
       for (dim_t iDim = rot_begin; iDim < rot_end; ++iDim)
       {
         auto diff = abs(Base::GetPointC(ptL, iDim) - Base::GetPointC(ptR, iDim));
-        if (diff > 180)
+        if (diff > std::numbers::pi)
         {
           if (Base::GetPointC(ptL, iDim) < Base::GetPointC(ptR, iDim))
           {
-            diff_end += abs((Base::GetPointC(ptL, iDim) + 360.0) - Base::GetPointC(ptR, iDim));
+            diff_end += abs((Base::GetPointC(ptL, iDim) + (2 * std::numbers::pi)) - Base::GetPointC(ptR, iDim));
           }
           else
           {
-            diff_end += abs(Base::GetPointC(ptL, iDim) - (Base::GetPointC(ptR, iDim) + 360.0));
+            diff_end += abs(Base::GetPointC(ptL, iDim) - (Base::GetPointC(ptR, iDim) + (2 * std::numbers::pi)));
           }
         }
         else
