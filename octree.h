@@ -587,6 +587,29 @@ namespace OrthoTree
       return d2;
     }
 
+    static constexpr TGeometry pose_size(TVector const& pt) noexcept
+    {
+      auto d2 = TGeometry{ 0 };
+      auto angle_dis = TGeometry{ 0 };
+      for (dim_t iDim = 0; iDim < DIMENSION_NO; ++iDim)
+      {
+        if (iDim < 3)
+        {
+          auto const d = Base::GetPointC(pt, iDim);
+          d2 += d * d;
+        }
+        else
+        {
+          auto const angle = Base::GetPointC(pt, iDim);
+          angle_dis += angle * angle;
+        }
+      }
+      auto const translation_part = sqrt(d2);
+      auto const orientation_part = (180 * (sqrt(angle_dis) / 4.6389)) * (1 / 2);
+
+      return translation_part + orientation_part;
+    }
+
     static constexpr TGeometry Size(TVector const& point) noexcept { return std::sqrt(Size2(point)); }
 
     static constexpr TGeometry Dot(TVector const& ptL, TVector const& ptR) noexcept
@@ -596,6 +619,34 @@ namespace OrthoTree
         value += Base::GetPointC(ptL, dimensionID) * Base::GetPointC(ptR, dimensionID);
 
       return value;
+    }
+
+    static constexpr TGeometry pose_distance(TVector const& ptL, TVector const& ptR) noexcept
+    {
+      auto d2 = TGeometry{ 0 };
+      auto angle_dis = TGeometry{ 0 };
+      for (dim_t iDim = 0; iDim < DIMENSION_NO; ++iDim)
+      {
+        if (iDim < 3)
+        {
+          auto const pt = Base::GetPointC(ptL, iDim) - Base::GetPointC(ptR, iDim);
+          d2 += pt * pt;
+        }
+        else
+        {
+          auto const angle = std::min(abs(Base::GetPointC(ptL, iDim) -
+            Base::GetPointC(ptR, iDim)), (2 * std::numbers::pi) -
+            (abs(Base::GetPointC(ptL, iDim) - Base::GetPointC(ptR, iDim))));
+          angle_dis += angle * angle;
+          // Bloated expression for std::min(abs(a - b), (2 * std::numbers::pi) - (abs(a - b)))
+          // Where a, b are ptL[iDim], ptR[iDim]
+        }
+      }
+
+      auto const translation_part = sqrt(d2);
+      auto const orientation_part = (180 * (sqrt(angle_dis) / 4.6389)) * (1 / 2);
+
+      return (translation_part + orientation_part);
     }
 
     static constexpr TGeometry Distance2(TVector const& ptL, TVector const& ptR) noexcept
@@ -609,6 +660,7 @@ namespace OrthoTree
       return d2;
     }
 
+    // Jump1
     static constexpr TGeometry Distance(TVector const& ptL, TVector const& ptR) noexcept { return std::sqrt(Distance2(ptL, ptR)); }
 
     static constexpr bool ArePointsEqual(TVector const& ptL, TVector const& ptR, TGeometry rAccuracy) noexcept
@@ -915,6 +967,28 @@ namespace OrthoTree
         return d2;
       }
 
+      static inline constexpr Geometry pose_size(Vector const& pt) noexcept
+      {
+        auto d2 = Geometry{ 0 };
+        auto angle_dis = Geometry{ 0 };
+        LOOPIVDEP
+        for (dim_t iDim = 0; iDim < DIMENSION_NO; ++iDim)
+        {
+          if (iDim < 3)
+          {
+            d2 += pt[iDim] * pt[iDim];
+          }
+          else
+          {
+            angle_dis += pt[iDim] * pt[iDim];
+          }
+        }
+        auto const translation_part = sqrt(d2);
+        auto const orientation_part = (180 * (sqrt(angle_dis) / 4.6389)) * (1 / 2);
+
+        return translation_part + orientation_part;
+      }
+
       static inline Geometry Size(Vector const& vector) noexcept { return std::sqrt(Size2(vector)); }
 
       static inline constexpr Vector GetBoxCenter(Box const& box) noexcept
@@ -1180,8 +1254,19 @@ namespace OrthoTree
         bool isInside = true;
         for (dim_t dimensionID = 0; dimensionID < DIMENSION_NO; ++dimensionID)
         {
-          centerDistance[dimensionID] = std::abs(centerPoint[dimensionID] - Geometry(AD::GetPointC(searchPoint, dimensionID)));
-          isInside &= centerDistance[dimensionID] <= halfSize[dimensionID];
+          if (dimensionID < 3)
+          {
+            centerDistance[dimensionID] = std::abs(centerPoint[dimensionID] - Geometry(AD::GetPointC(searchPoint, dimensionID)));
+            isInside &= centerDistance[dimensionID] <= halfSize[dimensionID];
+          }
+          else
+          {
+            centerDistance[dimensionID] = std::min(
+              abs(centerPoint[dimensionID] - Geometry(AD::GetPointC(searchPoint, dimensionID))),
+              (2 * std::numbers::pi) - (abs(centerPoint[dimensionID] - Geometry(AD::GetPointC(searchPoint, dimensionID)))));
+            // Bloated expression for std::min(abs(a - b), (2 * std::numbers::pi) - (abs(a - b)))
+            isInside &= centerDistance[dimensionID] <= halfSize[dimensionID];
+          }
         }
 
         if (isInside)
@@ -1203,9 +1288,21 @@ namespace OrthoTree
           Vector distance;
           for (dim_t dimensionID = 0; dimensionID < DIMENSION_NO; ++dimensionID)
           {
-            distance[dimensionID] = std::max(Geometry{}, centerDistance[dimensionID] - halfSize[dimensionID]);
+            if (dimensionID < 3)
+            {
+              distance[dimensionID] = std::max(Geometry{}, centerDistance[dimensionID] - halfSize[dimensionID]);
+            }
+            else
+            {
+              distance[dimensionID] = std::max(
+                Geometry{},
+                std::min(
+                  abs(centerDistance[dimensionID] - halfSize[dimensionID]),
+                  (2 * std::numbers::pi) - (abs(centerDistance[dimensionID] - halfSize[dimensionID]))));
+            }
           }
-          return Size(distance);
+
+          return pose_size(distance);
         }
       }
 
@@ -3669,7 +3766,7 @@ namespace OrthoTree
     {
       for (auto const entityID : entities)
       {
-        const auto distance = AD::Distance(searchPoint, detail::at(points, entityID));
+        const auto distance = AD::pose_distance(searchPoint, detail::at(points, entityID));
 
         // maxDistanceWithin is implemented for tolerance handling: distance should be less than maxDistanceWithin
         if (distance >= maxDistanceWithin)
@@ -4560,9 +4657,10 @@ namespace OrthoTree
       [[maybe_unused]] auto const pLeftTree = &leftTree;
       [[maybe_unused]] auto const pRightTree = &rightTree;
       auto nodePairToProceed = std::queue<ParentIteratorArray>{};
-      nodePairToProceed.push({
-        NodeIteratorAndStatus{  leftTree.m_nodes.find(rootKey), false },
-        NodeIteratorAndStatus{ rightTree.m_nodes.find(rootKey), false }
+      nodePairToProceed.push(
+        {
+          NodeIteratorAndStatus{  leftTree.m_nodes.find(rootKey), false },
+          NodeIteratorAndStatus{ rightTree.m_nodes.find(rootKey), false }
       });
       for (; !nodePairToProceed.empty(); nodePairToProceed.pop())
       {
